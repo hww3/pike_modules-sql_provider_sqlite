@@ -1,10 +1,17 @@
-dnl $Id: aclocal.m4,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+dnl $Id: aclocal.m4,v 1.2 2004-09-01 17:13:02 hww3 Exp $
 
 dnl Some compatibility with Autoconf 2.50+. Not complete.
 dnl newer Autoconf calls substr m4_substr
 ifdef([substr], ,[m4_copy([m4_substr],[substr])])
+dnl newer Autoconf calls changequote m4_changequote
+ifdef([changequote], ,[m4_copy([m4_changequote],[changequote])])
 dnl Autoconf 2.53+ hides their version numbers in m4_PACKAGE_VERSION.
 ifdef([AC_ACVERSION], ,[m4_copy([m4_PACKAGE_VERSION],[AC_ACVERSION])])
+
+dnl Not really a prerequisite, but suggest the use of Autoconf 2.50 to
+dnl autoconf-wrapper if it is used.  dnl can't be used since the wrapper
+dnl checks for it, so just store it in a dummy define.
+define([require_autoconf_2_50],[AC_PREREQ(2.50)])
 
 define([if_autoconf],
 [ifelse(ifelse(index(AC_ACVERSION,.),-1,0,[m4_eval(
@@ -69,14 +76,13 @@ pushdef([AC_PROG_CC],
     else :; fi
   fi
 
-  AC_MSG_CHECKING([if we are using TCC])
+  AC_MSG_CHECKING([if we are using TCC (TenDRA C Compiler)])
   AC_CACHE_VAL(pike_cv_prog_tcc, [
-    case "`$CC -V 2>&1|head -n 1`" in
-      tcc*)
-        pike_cv_prog_tcc="yes"
-      ;;
-      *) pike_cv_prog_tcc="no" ;;
-    esac
+    if $CC -V 2>&1 | grep -i TenDRA >/dev/null; then
+      pike_cv_prog_tcc="yes"
+    else
+      pike_cv_prog_tcc="no"
+    fi
   ])
   if test "x$pike_cv_prog_tcc" = "xyes"; then
     AC_MSG_RESULT(yes)
@@ -351,11 +357,11 @@ define(PIKE_FEATURE_OK,[
 
 define([AC_LOW_MODULE_INIT],
 [
-  # $Id: aclocal.m4,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+  # $Id: aclocal.m4,v 1.2 2004-09-01 17:13:02 hww3 Exp $
 
   MY_AC_PROG_CC
 
-  AC_DEFINE(POSIX_SOURCE)
+  AC_DEFINE([POSIX_SOURCE], [], [This should always be defined.])
 
   AC_SUBST(CONFIG_HEADERS)
 
@@ -399,7 +405,11 @@ define([AC_LOW_MODULE_INIT],
   if test "x$enable_binary" = "xno"; then
     RUNPIKE="USE_PIKE"
   else
-    RUNPIKE="DEFAULT_RUNPIKE"
+    if test "x$cross_compiling" = "xyes"; then
+      RUNPIKE="USE_PIKE"
+    else
+      RUNPIKE="DEFAULT_RUNPIKE"
+    fi
   fi
   AC_SUBST(RUNPIKE)
 ])
@@ -436,12 +446,15 @@ define([AC_MODULE_INIT],
   AC_LOW_MODULE_INIT()
   PIKE_FEATURE_CLEAR()
 
-  if test -f "$srcdir/module.pmod.in"; then
+  if test -f "$srcdir/module.pmod.in" -o -d "$srcdir/module.pmod.in"; then
     MODULE_PMOD_IN="$srcdir/module.pmod.in"
+    MODULE_WRAPPER_PREFIX="___"
   else
     MODULE_PMOD_IN=""
+    MODULE_WRAPPER_PREFIX=""
   fi
   AC_SUBST(MODULE_PMOD_IN)
+  AC_SUBST(MODULE_WRAPPER_PREFIX)
 
   if test -d $BUILD_BASE/modules/. ; then
     dynamic_module_makefile=$BUILD_BASE/modules/dynamic_module_makefile
@@ -617,6 +630,7 @@ define(MY_AC_CHECK_PRINTF_INT_TYPE, [
     AC_TRY_COMPILE([
 #define CONFIGURE_TEST
 #include "global.h"
+#include "pike_int_types.h"
     ], [
 $1 tmp;
     ], [
@@ -628,6 +642,7 @@ $1 tmp;
 
 #define CONFIGURE_TEST
 #include "global.h"
+#include "pike_int_types.h"
 
 int main() {
   char buf[50];
@@ -658,7 +673,7 @@ int main() {
       return !!strcmp("4711,17", buf);
     }
   }
-}], [pike_cv_printf_$1="${mod}"; found=yes])
+}], [pike_cv_printf_$1="${mod}"; found=yes], [:], [:])
 	test ${found} = yes && break
       done
       test ${found} = no && pike_cv_printf_$1=unknown
@@ -700,7 +715,7 @@ int main() {
   char buf[50];
   sprintf(buf, "%${mod}4.1f,%d",($1)17.0,17);
   return !!strcmp("17.0,17",buf);
-}], [pike_cv_printf_$1="${mod}"; found=yes])
+}], [pike_cv_printf_$1="${mod}"; found=yes], [:], [:])
 	test ${found} = yes && break
       done
       test ${found} = no && pike_cv_printf_$1=unknown
@@ -733,6 +748,39 @@ $1
 WARNING: $1
 
 EOF
+])
+
+dnl PIKE_ENABLE_BUNDLE(bundle_name, invalidate_set, opt_error_msg)
+dnl Checks if bundle_name is available, and if it is enables it and
+dnl invalidates the cache variables specified in invalidate_set.
+dnl Otherwise if opt_error_msg has been specified performs an error exit.
+define(PIKE_ENABLE_BUNDLE, [
+  test -f [$1].bundle && rm -f [$1].bundle
+  if test "$pike_bundle_dir" = ""; then
+    # Bundles not available.
+    echo "Bundles not available."
+    ifelse([$3], , :, [ AC_MSG_ERROR([$3]) ])
+  else
+    # Note: OSF/1 /bin/sh does not support glob expansion of
+    #       expressions like "$pike_bundle_dir/[$1]"*.tar.gz.
+    for f in `cd "$pike_bundle_dir" && echo [$1]*.tar.gz` no; do
+      if test -f "$pike_bundle_dir/$f"; then
+        # Notify toplevel that we want the bundle.
+	# Note that invalidation of the cache variables can't be done
+	# until the bundle actually has been built.
+	PIKE_MSG_WARN([Enabling bundle $1 from $pike_bundle_dir/$f.])
+        echo "[$2]" >"[$1].bundle"
+	break
+      fi
+    done
+    ifelse([$3], , , [
+      if test "$f" = "no"; then      
+	# Bundle not available.
+        echo "Bundle [$1] not available in $pike_bundle_dir."
+	AC_MSG_ERROR([$3])
+      fi
+    ])
+  fi
 ])
 
 dnl PKG_CHECK_MODULES(GSTUFF, gtk+-2.0 >= 1.3 glib = 1.3.4, action-if, action-not)

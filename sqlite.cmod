@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.2 2004-09-01 17:13:02 hww3 Exp $
  */
 
 /*
@@ -82,6 +82,14 @@
 
 #ifdef HAVE_SQLITE_H
 #include <sqlite.h>
+#define SQLITE_MAJOR_VERSION 2
+#else
+#ifdef HAVE_SQLITE3_H
+#include <sqlite3.h>
+#define SQLITE_MAJOR_VERSION 3
+#else
+#error No sqlite include found!
+#endif
 #endif
 
 PIKECLASS SQLite 
@@ -89,7 +97,11 @@ PIKECLASS SQLite
 
 typedef struct
 {
+#if SQLITE_MAJOR_VERSION < 3
     sqlite * db;
+#else
+    sqlite3 * db;
+#endif
     char * errmsg;
 } SQLITE_OBJECT_DATA;
 
@@ -97,8 +109,11 @@ CVAR SQLITE_OBJECT_DATA   *object_data;
 
 void clear_error_msg()
 {
+
+#if SQLITE_MAJOR_VERSION < 3
   if(THIS->object_data->errmsg)
     free(THIS->object_data->errmsg);
+#endif
 
   return;
 }
@@ -117,10 +132,16 @@ void clear_error_msg()
  */
 PIKEFUN void create(string path, void a, void b, void c)
 {
+#if SQLITE_MAJOR_VERSION < 3
   THIS->object_data->db = sqlite_open(path->str, 0, &THIS->object_data->errmsg);
+#else
+  int res = sqlite3_open(path->str, &THIS->object_data->db);
+  if (res!=SQLITE_OK)
+    sqlite3_errmsg(&THIS->object_data->errmsg);
+#endif
   if(THIS->object_data->db == NULL)
   {
-    Pike_error("Sql.SQLite: %s", THIS->object_data->errmsg);
+    Pike_error("Sql.SQLite(%d): %s", __LINE__, THIS->object_data->errmsg);
   }
   pop_n_elems(args);
 }
@@ -151,7 +172,11 @@ PIKEFUN int last_insert_rowid()
 {
   int rowid;
 
+#if SQLITE_MAJOR_VERSION < 3
   rowid = sqlite_last_insert_rowid(THIS->object_data->db);
+#else
+  rowid = sqlite3_last_insert_rowid(THIS->object_data->db);
+#endif
  
   pop_n_elems(args);
 
@@ -168,7 +193,11 @@ PIKEFUN int changes()
 {
   int changed;
 
+#if SQLITE_MAJOR_VERSION < 3
   changed = sqlite_changes(THIS->object_data->db);
+#else
+  changed = sqlite3_changes(THIS->object_data->db);
+#endif
  
   pop_n_elems(args);
 
@@ -181,7 +210,11 @@ PIKEFUN int changes()
  */
 PIKEFUN void interrupt()
 {
+#if SQLITE_MAJOR_VERSION < 3
   sqlite_interrupt(THIS->object_data->db);
+#else
+  sqlite3_interrupt(THIS->object_data->db);
+#endif
  
   pop_n_elems(args);
 }
@@ -213,7 +246,12 @@ PIKEFUN array query(string query)
 #ifdef HAVE_USLEEP
   useconds_t useconds;
 #endif
+#if SQLITE_MAJOR_VERSION < 3
   sqlite_vm *vm;
+#else
+  sqlite3_stmt *stmt;
+#endif
+
   const char * tail;
   int r;
   int rows=0;
@@ -221,26 +259,44 @@ PIKEFUN array query(string query)
 
   clear_error_msg();
 
+#if SQLITE_MAJOR_VERSION < 3
   r = sqlite_compile(THIS->object_data->db, query->str, &tail, &vm, &THIS->object_data->errmsg);
-  if(r != SQLITE_OK)
+#else
+  r = sqlite3_prepare(THIS->object_data->db, query->str, &tail, &stmt, &THIS->object_data->errmsg);
+#endif
+
+  if(r != SQLITE_OK && r != SQLITE_DONE)
   {
-    Pike_error("Sql.SQLite: %s\n", THIS->object_data->errmsg) ;
+#if SQLITE_MAJOR_VERSION > 2
+    THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
+#endif
+    Pike_error("Sql.SQLite(%d): %s\n", __LINE__, THIS->object_data->errmsg) ;
   }  
 
   do
   {
     int cols=0;
     const char ** columnData;
-    const char ** columnName;
+    const char ** columnName = NULL;
 #ifdef DEBUG
 printf("getting row...\n");
 #endif
-    r = sqlite_step(vm, &cols, &columnData, &columnName); 
+
+#if SQLITE_MAJOR_VERSION < 3
+    r = sqlite_step(vm, &cols, &columnData, &columnName);
+#else
+    r = sqlite3_step(stmt);
+#endif
+
 #ifdef DEBUG
 printf("got row...%d\n", r);
 #endif
     if (r == SQLITE_ROW)
     {
+#if SQLITE_MAJOR_VERSION > 2
+      cols = sqlite3_column_count(stmt);
+      /* FIXME: Get stuff here! */
+#endif
        /* do something with the row */
        int c = 0;
        rows++;
@@ -249,8 +305,21 @@ printf("going to set the row...\n");
 #endif
        for(c=0; c<cols; c++)
        {
+#if SQLITE_MAJOR_VERSION < 3
          push_text(columnName[c]);
          push_text(columnData[c]);
+#else
+#define push_binary_text(T,L) do {					\
+    const char *_ = (T);						\
+    struct svalue *_sp_ = Pike_sp++;					\
+    _sp_->subtype=0;							\
+    _sp_->u.string=make_shared_binary_string(_,L);		        \
+    debug_malloc_touch(_sp_->u.string);					\
+    _sp_->type=PIKE_T_STRING;						\
+  }while(0)
+	 push_text(sqlite3_column_name(stmt, c));
+	 push_binary_text(sqlite3_column_blob(stmt, c), sqlite3_column_bytes(stmt, c));
+#endif
        }
 
        f_aggregate_mapping(cols*2);
@@ -259,7 +328,7 @@ printf("set the row...\n");
 #endif
     }
 
-    if(r == SQLITE_DONE) 
+    if(r == SQLITE_DONE)
     { 
       code=0;
       break;
@@ -299,7 +368,10 @@ printf("got to the end...\n");
     if(rows)
        pop_n_elems(rows);
     pop_n_elems(args);
-    Pike_error("Sql.SQLite: %s\n", THIS->object_data->errmsg);
+#if SQLITE_MAJOR_VERSION > 2
+    THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
+#endif
+    Pike_error("Sql.SQLite(%d): %s\n", __LINE__, THIS->object_data->errmsg);
   }
   else
   {
@@ -317,13 +389,20 @@ printf("got to the end...\n");
     }
   }
 
+#if SQLITE_MAJOR_VERSION < 3
   r = sqlite_finalize(vm, &THIS->object_data->errmsg);
+#else
+  r = sqlite3_finalize(stmt);
+#endif
 
-  if(r != SQLITE_OK)
+  if(r != SQLITE_OK && r != SQLITE_DONE)
   {
+#if SQLITE_MAJOR_VERSION > 2
+    THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
+#endif
     if(rows) pop_stack();
     pop_n_elems(args);
-    Pike_error("Sql.SQLite: %s\n", THIS->object_data->errmsg);
+    Pike_error("Sql.SQLite(%d): %s\n", __LINE__, THIS->object_data->errmsg);
   }  
 
   if(rows>0)
@@ -334,9 +413,8 @@ printf("got to the end...\n");
   else
   {
      pop_n_elems(args);
-     push_int(1);
+     push_int(1); /* BUG: Docs on Sql.Sql.query() are abigous, but it should be 0 or ({}).*/
   }
-
 }
 
 
@@ -358,10 +436,16 @@ EXIT
   if(THIS->object_data)
   {
     if(THIS->object_data->db != NULL)
+#if SQLITE_MAJOR_VERSION < 3
       sqlite_close(THIS->object_data->db);
+#else
+    sqlite3_close(THIS->object_data->db);
+#endif
 
+#if SQLITE_MAJOR_VERSION < 3
     if(THIS->object_data->errmsg != NULL)
        free(THIS->object_data->errmsg);
+#endif
 
     free(THIS->object_data);
   }
