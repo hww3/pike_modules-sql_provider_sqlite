@@ -1,0 +1,381 @@
+/* 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of the
+ * License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ * $Id: sqlite.cmod,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+ */
+
+/*
+ * File licensing and authorship information block.
+ *
+ * Version: MPL 1.1/LGPL 2.1
+ *
+ * The contents of this file are subject to the Mozilla Public License Version
+ * 1.1 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/
+ *
+ * Software distributed under the License is distributed on an "AS IS" basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ *
+ * The Initial Developer of the Original Code is
+ *
+ * Bill Welliver <hww3@riverweb.com>
+ *
+ * Portions created by the Initial Developer are Copyright (C) Bill Welliver
+ * All Rights Reserved.
+ *
+ * Contributor(s):
+ *
+ * Alternatively, the contents of this file may be used under the terms of
+ * the GNU Lesser General Public License Version 2.1 or later (the "LGPL"),
+ * in which case the provisions of the LGPL are applicable instead
+ * of those above. If you wish to allow use of your version of this file only
+ * under the terms of the LGPL, and not to allow others to use your version
+ * of this file under the terms of the MPL, indicate your decision by
+ * deleting the provisions above and replace them with the notice
+ * and other provisions required by the LGPL. If you do not delete
+ * the provisions above, a recipient may use your version of this file under
+ * the terms of any one of the MPL or the LGPL.
+ *
+ * Significant Contributors to this file are:
+ *
+ */
+
+/*! @module Sql
+ */
+
+/*! @module Provider
+ */
+
+/*! @module SQLite
+ */
+
+#define _GNU_SOURCE
+
+#include "util.h"
+
+#ifdef HAVE_SQLITE
+#endif /* HAVE_SQLITE */
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+
+#ifdef HAVE_SQLITE_H
+#include <sqlite.h>
+#endif
+
+PIKECLASS SQLite 
+{
+
+typedef struct
+{
+    sqlite * db;
+    char * errmsg;
+} SQLITE_OBJECT_DATA;
+
+CVAR SQLITE_OBJECT_DATA   *object_data;
+
+void clear_error_msg()
+{
+  if(THIS->object_data->errmsg)
+    free(THIS->object_data->errmsg);
+
+  return;
+}
+
+/****
+ *
+ * Low-level SQLite interface
+ *
+ ****/
+
+/*! @decl void create(string path)
+ *!   Creates a new SQLite object
+ *!
+ *!  @param path
+ *!    sets the filename that SQLite will use as its datafile.
+ */
+PIKEFUN void create(string path, void a, void b, void c)
+{
+  THIS->object_data->db = sqlite_open(path->str, 0, &THIS->object_data->errmsg);
+  if(THIS->object_data->db == NULL)
+  {
+    Pike_error("Sql.SQLite: %s", THIS->object_data->errmsg);
+  }
+  pop_n_elems(args);
+}
+
+PIKEFUN object big_query(string q)
+{
+   int i;
+   
+   i=find_identifier("query", Pike_fp->current_object->prog);
+   apply_low(Pike_fp->current_object, i, 1);
+
+   push_text( "Sql.sql_result"); 
+   SAFE_APPLY_MASTER("resolv", 1 ); 
+
+   stack_swap();  
+   apply_svalue( Pike_sp-2, 1); 
+   stack_swap(); 
+   pop_stack(); 
+}
+
+/*! @decl int last_insert_rowid()
+ *!   Returns the last inserted rowid
+ *!
+ *! @returns
+ *!   the unique id of the last inserted row
+ */
+PIKEFUN int last_insert_rowid()
+{
+  int rowid;
+
+  rowid = sqlite_last_insert_rowid(THIS->object_data->db);
+ 
+  pop_n_elems(args);
+
+  push_int(rowid);
+}
+
+/*! @decl int changes()
+ *!   Returns the number of changed rows since the database was quiesced or commited.
+ *!
+ *! @returns
+ *!   the number of rows changed since the last commit.
+ */
+PIKEFUN int changes()
+{
+  int changed;
+
+  changed = sqlite_changes(THIS->object_data->db);
+ 
+  pop_n_elems(args);
+
+  push_int(changed);
+}
+
+/*! @decl void interrupt()
+ *!   interrupts the query in progress. may be called from a different thread or the signal handler.
+ *!
+ */
+PIKEFUN void interrupt()
+{
+  sqlite_interrupt(THIS->object_data->db);
+ 
+  pop_n_elems(args);
+}
+
+/*! @decl string version()
+ *!
+ *!  returns the version of the database engine.
+ *!
+ */
+PIKEFUN string version()
+{
+  push_text("SQLite " SQLITE_VERSION);
+}
+
+/*! @decl array(mapping) query(string query)
+ *!
+ *!  executes the query @[query]
+ *!
+ *!  throws an error if the query was unsuccessful in any way.
+ *!
+ *!  @returns
+ *!    @[1] on success if the query returns no rows (like INSERT, etc), or
+ *!    an array of mappings, one element in the array for each row. each row is
+ *!    represented by a mapping, with keys of the column names.
+ */
+PIKEFUN array query(string query)
+{
+  struct svalue *result;
+#ifdef HAVE_USLEEP
+  useconds_t useconds;
+#endif
+  sqlite_vm *vm;
+  const char * tail;
+  int r;
+  int rows=0;
+  int code=1;
+
+  clear_error_msg();
+
+  r = sqlite_compile(THIS->object_data->db, query->str, &tail, &vm, &THIS->object_data->errmsg);
+  if(r != SQLITE_OK)
+  {
+    Pike_error("Sql.SQLite: %s\n", THIS->object_data->errmsg) ;
+  }  
+
+  do
+  {
+    int cols=0;
+    const char ** columnData;
+    const char ** columnName;
+#ifdef DEBUG
+printf("getting row...\n");
+#endif
+    r = sqlite_step(vm, &cols, &columnData, &columnName); 
+#ifdef DEBUG
+printf("got row...%d\n", r);
+#endif
+    if (r == SQLITE_ROW)
+    {
+       /* do something with the row */
+       int c = 0;
+       rows++;
+#ifdef DEBUG
+printf("going to set the row...\n");
+#endif
+       for(c=0; c<cols; c++)
+       {
+         push_text(columnName[c]);
+         push_text(columnData[c]);
+       }
+
+       f_aggregate_mapping(cols*2);
+#ifdef DEBUG
+printf("set the row...\n");
+#endif
+    }
+
+    if(r == SQLITE_DONE) 
+    { 
+      code=0;
+      break;
+    }
+
+    else if (r == SQLITE_BUSY)
+    {
+       /* sleep, then try again. */
+#ifdef HAVE_USLEEP
+       useconds=100; /* sleep for 100 mucroseconds */
+       usleep(useconds);
+#else
+       sleep(1);
+#endif
+       code = 1;
+    }
+    else if (r == SQLITE_ROW)
+    {
+      code = 1;
+    }
+    else
+    {
+       /* some other error code was returned */
+       code = 0;
+       break;
+    }
+  }
+  while(code);  
+#ifdef DEBUG
+printf("got to the end...\n");
+#endif
+  if(r!=SQLITE_DONE)
+  {
+#ifdef DEBUG
+    printf("had an error... %d\n", r);
+#endif
+    if(rows)
+       pop_n_elems(rows);
+    pop_n_elems(args);
+    Pike_error("Sql.SQLite: %s\n", THIS->object_data->errmsg);
+  }
+  else
+  {
+    /* successful query retrieval */
+#ifdef DEBUG
+    printf("got to the end with %d rows.\n", rows);
+#endif
+    if(rows!=0)
+    {
+
+      f_aggregate(rows); 
+#ifdef DEBUG
+      printf("aggregated %d rows.\n", rows);
+#endif
+    }
+  }
+
+  r = sqlite_finalize(vm, &THIS->object_data->errmsg);
+
+  if(r != SQLITE_OK)
+  {
+    if(rows) pop_stack();
+    pop_n_elems(args);
+    Pike_error("Sql.SQLite: %s\n", THIS->object_data->errmsg);
+  }  
+
+  if(rows>0)
+  {
+    stack_pop_keep_top(); 
+
+  }
+  else
+  {
+     pop_n_elems(args);
+     push_int(1);
+  }
+
+}
+
+
+INIT
+{
+    SQLITE_OBJECT_DATA * dta = 
+	(SQLITE_OBJECT_DATA*)malloc(sizeof(SQLITE_OBJECT_DATA));
+    if (!dta)
+        Pike_error("init_sqlite: Out of memory!\n");
+
+    THIS->object_data = dta;
+
+    THIS->object_data->db = NULL;
+    THIS->object_data->errmsg = 0;
+}
+
+EXIT 
+{
+  if(THIS->object_data)
+  {
+    if(THIS->object_data->db != NULL)
+      sqlite_close(THIS->object_data->db);
+
+    if(THIS->object_data->errmsg != NULL)
+       free(THIS->object_data->errmsg);
+
+    free(THIS->object_data);
+  }
+}
+
+}
+
+/*! @endmodule
+ */
+
+/*! @endmodule
+ */
+
+/*! @endmodule
+ */
+
+

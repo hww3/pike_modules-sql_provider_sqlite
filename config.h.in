@@ -1,0 +1,7 @@
+/* config.h.in.  Generated automatically from configure.in by autoheader.  */
+
+/* Define if you have the <sqlite.h> header file.  */
+#undef HAVE_SQLITE_H
+
+/* Define if you have the sqlite library (-lsqlite).  */
+#undef HAVE_LIBSQLITE

@@ -1,0 +1,20 @@
+# $Id: configure.in,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+AC_INIT(module.pmod.in)
+
+AC_MODULE_INIT()
+
+PKG_CHECK_MODULES(SQLITE, sqlite)
+
+AC_CHECK_HEADERS(sqlite.h)
+AC_CHECK_HEADERS(unistd.h)
+
+AC_CHECK_LIB(sqlite, sqlite_open) 
+
+AC_CHECK_FUNCS(usleep)
+
+AC_SUBST(SQLITE_CFLAGS) 
+AC_SUBST(SQLITE_LIBS)
+
+AC_OUTPUT(Makefile)
+
+

@@ -1,0 +1,21 @@
+#pike __REAL_VERSION__
+
+constant __author = "Bill Welliver <hww3@riverweb.com>";
+constant __version = "1.2";
+
+//! an interface to the SQLite SQL Database Library (www.sqlite.org)
+class SQLite {
+
+inherit .___SQLite.SQLite;
+
+void create(mixed ... args)
+{
+
+#ifdef __NT__
+  ::create(args*"\\");
+#else
+  ::create(args*"/");
+#endif
+
+  }
+}
