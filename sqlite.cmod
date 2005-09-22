@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.6 2005-09-22 04:47:09 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.7 2005-09-22 04:56:21 hww3 Exp $
  */
 
 /*
@@ -295,13 +295,13 @@ printf("got row...%d\n", r);
 #endif
     if (r == SQLITE_ROW)
     {
+       /* do something with the row */
+       int c = 0;
+       rows++;
 #if SQLITE_MAJOR_VERSION > 2
       cols = sqlite3_column_count(stmt);
       /* FIXME: Get stuff here! */
 #endif
-       /* do something with the row */
-       int c = 0;
-       rows++;
 #ifdef DEBUG
 printf("going to set the row...\n");
 #endif
@@ -392,7 +392,11 @@ printf("got to the end...\n");
       printf("aggregated %d rows.\n", rows);
 #endif
     }
-//    else push_array(&empty_array);
+    else 
+    {
+      push_int(0); 
+      f_allocate(1);
+    }
   }
 
 #if SQLITE_MAJOR_VERSION < 3
@@ -406,21 +410,12 @@ printf("got to the end...\n");
 #if SQLITE_MAJOR_VERSION > 2
     THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
 #endif
-    if(rows) pop_stack();
+    pop_stack();
     pop_n_elems(args);
     Pike_error("Sql.SQLite(%d): %s\n", __LINE__, THIS->object_data->errmsg);
   }  
 
-  if(rows>0)
-  {
-    stack_pop_keep_top(); 
-
-  }
-  else
-  {
-     pop_n_elems(args);
-     push_int(1); /* BUG: Docs on Sql.Sql.query() are abigous, but it should be 0 or ({}).*/
-  }
+  stack_pop_keep_top(); 
 }
 
 
