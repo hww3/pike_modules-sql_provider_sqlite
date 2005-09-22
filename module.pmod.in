@@ -18,4 +18,22 @@ void create(mixed ... args)
 #endif
 
   }
+
+
+object|int big_query(object|string q, mapping(string|int:mixed)|void bindings)
+{
+  if(!bindings)
+    return ::big_query(q);
+  else
+    return ::big_query(Sql.sql_util.emulate_bindings(q, bindings, this));
+}
+ 
+array query(object|string q, mapping(string|int:mixed)|void bindings)
+{
+  if(!bindings)
+    return ::query(q);
+  else
+    return ::query(Sql.sql_util.emulate_bindings(q, bindings, this));
+}
+
 }
