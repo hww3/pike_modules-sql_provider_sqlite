@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.4 2005-09-22 04:00:44 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.5 2005-09-22 04:46:03 hww3 Exp $
  */
 
 /*
@@ -309,7 +309,10 @@ printf("going to set the row...\n");
        {
 #if SQLITE_MAJOR_VERSION < 3
          push_text(columnName[c]);
-         push_text(columnData[c]);
+         if(columnData[c] == NULL
+           push_int(0);
+         else
+           push_text(columnData[c]);
 #else
 #define push_binary_text(T,L) do {					\
     const char *_ = (T);						\
@@ -389,6 +392,7 @@ printf("got to the end...\n");
       printf("aggregated %d rows.\n", rows);
 #endif
     }
+//    else push_array(&empty_array);
   }
 
 #if SQLITE_MAJOR_VERSION < 3
