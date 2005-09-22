@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.5 2005-09-22 04:46:03 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.6 2005-09-22 04:47:09 hww3 Exp $
  */
 
 /*
@@ -309,7 +309,7 @@ printf("going to set the row...\n");
        {
 #if SQLITE_MAJOR_VERSION < 3
          push_text(columnName[c]);
-         if(columnData[c] == NULL
+         if(columnData[c] == NULL)
            push_int(0);
          else
            push_text(columnData[c]);
