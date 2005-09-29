@@ -1,0 +1,6 @@
+Changes since version 1.4
+
+- Fix a bug that can cause segfaults when results contain nulls.
+
+- Fix a number of compilation bugs
+

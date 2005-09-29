@@ -1,14 +1,44 @@
-# $Id: Makefile.in,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+# $Id: Makefile.in,v 1.2 2005-09-29 18:11:48 hww3 Exp $
 @make_variables@
 VPATH=@srcdir@:
+
+# things we should define.
+
+# the .o files that we need to generate for the module
+# rules will automatically generate these from .c, .cmod, .m and .mmod files.
 OBJS=sqlite.o
+
+# the module directory we put things into. it should be a directory path
+# of .pmod directories, and this must end with a trailing slash.
 MODDIR=Sql.pmod/Provider.pmod/
+
+# the module name the resulting dynamic and/or pike module will be
+# installed as. note that it's just a module or class name without extension.
 MODNAME=SQLite
 
+# the pike portion of the module. may be either a file or a directory
+# containing multiple .pike and .pmod files.
 MODULE_PMOD_IN=module.pmod.in
-MODULE_LDFLAGS=@LDFLAGS@ @LIBS@
 
+# used by the module repository to scan for autodocs. should be the
+# list of non pike files containing autodoc markup (ie cmod or c files).
 AUTODOC_SRC_IN=sqlite.cmod
+
+# the module name note that there is no error checking, so all of these
+# related variables should agree.
+MODULE_NAME=Sql.Provider.SQLite
+
+# the module name, with periods replaced with underscores. used to
+# generate the module distribution.
+MODULE_DIR_NAME=Sql_Provider_SQLite
+
+# need i say more?
+MODULE_LICENSE=GPL/LGPL/MPL
+
+# we shouldn't need to do anything to the rest of the file.
+
+
+MODULE_LDFLAGS=@LDFLAGS@ @LIBS@
 
 CONFIG_HEADERS=@CONFIG_HEADERS@
 
@@ -17,3 +47,13 @@ LDFLAGS=@SQLITE_LIBS@
 
 @dynamic_module_makefile@
 @dependencies@
+
+release:
+        cvs rtag -D now RELEASE_1_${MIN} pike_modules/${MODULE_DIR_NAME}
+        cvs export -d ${MODULE_DIR_NAME}-1.${MIN} -r RELEASE_1_${MIN} pike_modules/${MODULE_DIR_NAME}
+        cd ${MODULE_DIR_NAME}-1.${MIN} && \
+        pike -x module --autoheader && pike -x module --autoconf && \
+        rm -rf autom4*
+        gtar czvf ${MODULE_DIR_NAME}-1.${MIN}.tar.gz  ${MODULE_DIR_NAME}-1.${MIN}
+        pike upload_module_version.pike ${MODULE_NAME} 1.${MIN} "${MODULE_LICENSE}"
+
