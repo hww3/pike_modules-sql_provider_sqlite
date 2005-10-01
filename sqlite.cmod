@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.8 2005-10-01 05:28:39 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.9 2005-10-01 05:51:52 hww3 Exp $
  */
 
 /*
@@ -267,12 +267,12 @@ PIKEFUN array query(string query)
   r = sqlite3_prepare(THIS->object_data->db, query->str, &tail, &stmt, &THIS->object_data->errmsg);
 #endif
 
-  if(r != SQLITE_OK && r != SQLITE_DONE)
+  if(!(r == SQLITE_OK || r == SQLITE_DONE))
   {
 #if SQLITE_MAJOR_VERSION > 2
     THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
 #endif
-    Pike_error("Sql.SQLite(%d): %s\n", r, THIS->object_data->errmsg) ;
+    Pike_error("Sql.SQLite(%d, %d): %s\n", __LINE__, r, THIS->object_data->errmsg) ;
   }  
 
   do
@@ -365,18 +365,25 @@ printf("set the row...\n");
 #ifdef DEBUG
 printf("got to the end...\n");
 #endif
-  if(r!=SQLITE_DONE)
+  if(!(r==SQLITE_DONE || r==SQLITE_OK)) // sometimes, ok is returned when no rows are generated as part of a query (like inserts)
   {
 #ifdef DEBUG
     printf("had an error... %d\n", r);
 #endif
+
+#if SQLITE_MAJOR_VERSION < 3
+  r = sqlite_finalize(vm, &THIS->object_data->errmsg);
+#else
+    THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
+#endif
+
     if(rows)
        pop_n_elems(rows);
     pop_n_elems(args);
 #if SQLITE_MAJOR_VERSION > 2
     THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
 #endif
-    Pike_error("Sql.SQLite(%d): %s\n", __LINE__, THIS->object_data->errmsg);
+    Pike_error("Sql.SQLite(%d, %d): %s\n", __LINE__, r, THIS->object_data->errmsg);
   }
   else
   {
@@ -405,14 +412,14 @@ printf("got to the end...\n");
   r = sqlite3_finalize(stmt);
 #endif
 
-  if(r != SQLITE_OK && r != SQLITE_DONE)
+  if(!(r == SQLITE_OK || r == SQLITE_DONE))
   {
 #if SQLITE_MAJOR_VERSION > 2
     THIS->object_data->errmsg = sqlite3_errmsg(THIS->object_data->db);
 #endif
     pop_stack();
     pop_n_elems(args);
-    Pike_error("Sql.SQLite(%d): %s\n", __LINE__, THIS->object_data->errmsg);
+    Pike_error("Sql.SQLite(%d, %d): %s\n", __LINE__, r, THIS->object_data->errmsg);
   }  
 
   stack_pop_keep_top(); 
