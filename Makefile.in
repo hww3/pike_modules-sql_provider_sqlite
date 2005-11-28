@@ -1,4 +1,4 @@
-# $Id: Makefile.in,v 1.3 2005-10-01 05:30:13 hww3 Exp $
+# $Id: Makefile.in,v 1.4 2005-11-28 19:26:24 hww3 Exp $
 @make_variables@
 VPATH=@srcdir@:
 
@@ -56,4 +56,3 @@ release:
 	rm -rf autom4*
 	gtar czvf ${MODULE_DIR_NAME}-1.${MIN}.tar.gz  ${MODULE_DIR_NAME}-1.${MIN}
 	pike upload_module_version.pike ${MODULE_NAME} 1.${MIN} "${MODULE_LICENSE}"
-
