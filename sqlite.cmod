@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.9 2005-10-01 05:51:52 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.10 2005-11-28 22:18:37 hww3 Exp $
  */
 
 /*
@@ -183,6 +183,54 @@ PIKEFUN int last_insert_rowid()
   pop_n_elems(args);
 
   push_int(rowid);
+}
+
+PIKEFUN string encode_binary(string str)
+{
+  char * out;
+  int r;
+
+  out = malloc(2 +(257 * str->len )/254);
+
+  if(out==NULL)
+  {
+     Pike_error("encode_binary: unable to allocate memory.\n");
+  }
+
+  r = sqlite_encode_binary(str->str, str->len, out);
+
+  if(r == NULL)
+  {
+    Pike_error("encode_binary: error encoding!\n");
+  }  
+
+  pop_stack();
+
+  push_text(out);
+}
+
+PIKEFUN string decode_binary(string str)
+{
+  char * out;
+  int r;
+
+  out = malloc(str->len);
+
+  if(out==NULL)
+  {
+     Pike_error("encode_binary: unable to allocate memory.\n");
+  }
+
+  r = sqlite_decode_binary(str->str, out);
+
+  if(r == -1)
+  {
+    Pike_error("encode_binary: error encoding!\n");
+  }  
+
+  pop_stack();
+
+  push_text(out);
 }
 
 /*! @decl int changes()
