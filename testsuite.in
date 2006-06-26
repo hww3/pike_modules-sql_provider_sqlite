@@ -1,3 +1,10 @@
-dnl $Id: testsuite.in,v 1.1.1.1 2004-09-01 15:12:44 hww3 Exp $
+START_MARKER
 
+// verify that we have all of the expected classes and objects
+test_do(rm("testsuite.db"))
+test_true(objectp(Sql.Sql("SQLite://testsuite.db")))
+test_eval_error(Sql.Sql("SQLite://testsuite.db")->query("select * from foo"))
+test_true(Sql.Sql("SQLite://testsuite.db")->query("select * from SQLITE_MASTER"))
+test_false(sizeof(Sql.Sql("SQLite://testsuite.db")->list_tables()))
+test_do(rm("testsuite.db"))
 
