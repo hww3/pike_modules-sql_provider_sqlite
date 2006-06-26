@@ -1,3 +1,10 @@
+Changes since version 1.6
+
+- Module works with sqlite3 now, instead of dumping core.
+- Reworked configure tests to be more robust.
+- Include binary encoding and decoding methods that are not part
+  of the sqlite core.
+
 Changes since version 1.5
 
 - Better error messages from failed queries.

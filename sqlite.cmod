@@ -13,7 +13,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * $Id: sqlite.cmod,v 1.10 2005-11-28 22:18:37 hww3 Exp $
+ * $Id: sqlite.cmod,v 1.11 2006-06-26 15:27:32 hww3 Exp $
  */
 
 /*
@@ -69,9 +69,7 @@
 #define _GNU_SOURCE
 
 #include "util.h"
-
-#ifdef HAVE_SQLITE
-#endif /* HAVE_SQLITE */
+#include "sqlite_config.h"
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -312,7 +310,7 @@ PIKEFUN array query(string query)
 #if SQLITE_MAJOR_VERSION < 3
   r = sqlite_compile(THIS->object_data->db, query->str, &tail, &vm, &THIS->object_data->errmsg);
 #else
-  r = sqlite3_prepare(THIS->object_data->db, query->str, &tail, &stmt, &THIS->object_data->errmsg);
+  r = sqlite3_prepare(THIS->object_data->db, query->str, query->len, &stmt, &tail);
 #endif
 
   if(!(r == SQLITE_OK || r == SQLITE_DONE))
