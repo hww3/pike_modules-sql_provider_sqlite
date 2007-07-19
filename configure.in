@@ -1,10 +1,7 @@
-# $Id: configure.in,v 1.4 2007-02-02 18:13:12 hww3 Exp $
+# $Id: configure.in,v 1.5 2007-07-19 00:48:24 hww3 Exp $
 AC_INIT(module.pmod.in)
 
 AC_MODULE_INIT()
-
-
-
 
 AC_DEFUN(PKG_CHECK_SQLITE, [
 

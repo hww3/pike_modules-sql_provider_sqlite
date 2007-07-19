@@ -1,7 +1,7 @@
 #pike __REAL_VERSION__
 
 constant __author = "Bill Welliver <hww3@riverweb.com>";
-constant __version = "1.7";
+constant __version = "1.8";
 
 //! an interface to the SQLite SQL Database Library (www.sqlite.org)
 class SQLite {
@@ -106,16 +106,20 @@ array list_tables(string|void n)
   string qry = "";
 
   if(n)
-    qry = "SELECT name FROM SQLITE_MASTER WHERE name like '" + n + "%'";  
+    qry = "SELECT name FROM SQLITE_MASTER WHERE name like '" + n + "%' and TYPE='table'";  
   else
-    qry = "SELECT name FROM SQLITE_MASTER";  
+    qry = "SELECT name FROM SQLITE_MASTER where TYPE='table'";  
 
   array r = query(qry);
   array out = ({});
 
   foreach(r;;mapping row)
-    out += ({row->name});
-
+  {
+    if(row->name)
+      out += ({row->name});
+    else
+      out += ({row["sqlite_master.name"] });
+  }
   return out;
 }
 
